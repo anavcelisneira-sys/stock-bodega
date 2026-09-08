@@ -1,0 +1,796 @@
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E8EAE4">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stock">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Stock Bodega</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+  :root{
+    --paper:#E8EAE4;
+    --card:#F7F8F4;
+    --ink:#131A16;
+    --soft:#5A645C;
+    --line:#C7CDC3;
+    --entrada:#1D3F52;
+    --salida:#6E3A2E;
+    --verde:#1F6F4A;
+    --ambar:#B87A0E;
+    --rojo:#9E2B20;
+    --r:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0;padding:0;background:var(--paper);color:var(--ink);
+    font-family:'Archivo',system-ui,-apple-system,'Helvetica Neue',sans-serif;
+    font-size:16px;line-height:1.45;
+    font-variant-numeric:tabular-nums;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:14px 14px 96px}
+  h1{font-family:'Archivo Narrow','Archivo',sans-serif;font-size:22px;font-weight:700;margin:0;letter-spacing:.01em}
+  .head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .head p{margin:0;font-size:13px;color:var(--soft)}
+  .num{font-family:'Archivo Narrow','Archivo',sans-serif;font-weight:700}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+  .panel h2{font-size:15px;font-weight:600;margin:0 0 10px}
+  .muted{color:var(--soft);font-size:13.5px}
+
+  button{font:inherit;cursor:pointer;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:11px 14px}
+  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--entrada);outline-offset:2px}
+  .big{width:100%;padding:17px 14px;font-size:17px;font-weight:600;border:none;color:#fff}
+  .big.in{background:var(--entrada)}
+  .big.out{background:var(--salida)}
+  .row{display:flex;gap:9px}
+  .row>*{flex:1}
+  .ghost{background:transparent}
+  .link{background:none;border:none;padding:6px 0;color:var(--entrada);text-decoration:underline;font-size:14px}
+  .danger{color:var(--rojo)}
+
+  label{display:block;font-size:13px;color:var(--soft);margin:10px 0 4px}
+  input,select,textarea{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink)}
+  textarea{min-height:60px;resize:vertical}
+
+  .tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:40}
+  .tabs button{flex:1;border:none;background:none;padding:9px 2px;font-size:12.5px;color:var(--soft);border-radius:10px}
+  .tabs button[aria-current="true"]{background:var(--paper);color:var(--ink);font-weight:600}
+
+  .item{display:flex;align-items:center;gap:11px;padding:11px 0;border-top:1px solid var(--line)}
+  .item:first-child{border-top:none}
+  .item .grow{flex:1;min-width:0}
+  .item .name{font-weight:600;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .sub{font-size:12.5px;color:var(--soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .qty{font-family:'Archivo Narrow','Archivo',sans-serif;font-weight:700;font-size:21px;text-align:right;line-height:1}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .dot.ok{background:var(--verde)}.dot.low{background:var(--ambar)}.dot.zero{background:var(--rojo)}
+
+  .stepper{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:#fff}
+  .stepper button{border:none;background:none;font-size:24px;width:56px;padding:12px 0;line-height:1}
+  .stepper input{border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);border-radius:0;text-align:center;font-size:24px;font-weight:700;padding:12px 0}
+
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+  .chips button{padding:9px 13px;font-size:14.5px;font-weight:600;border-radius:999px;background:#fff}
+  .chips button.wide{flex:1}
+  .chips button.clear{color:var(--soft);font-weight:400}
+  .totalbox{margin-top:10px;font-size:14px;color:var(--soft)}
+  .totalbox strong{font-family:'Archivo Narrow','Archivo',sans-serif;font-size:19px;color:var(--ink)}
+
+  .seg{display:flex;gap:8px}
+  .seg button{flex:1;font-weight:600;font-size:15px}
+  .seg button[aria-pressed="true"].in{background:var(--entrada);color:#fff;border-color:var(--entrada)}
+  .seg button[aria-pressed="true"].out{background:var(--salida);color:#fff;border-color:var(--salida)}
+
+  #reader{width:100%;border-radius:var(--r);overflow:hidden;background:#0d1210;min-height:210px}
+  #reader video{width:100%!important;display:block}
+
+  .sheet{position:fixed;inset:0;background:rgba(19,26,22,.5);display:flex;align-items:flex-end;z-index:60}
+  .sheet[hidden]{display:none}
+  .sheet .inner{background:var(--paper);width:100%;max-width:520px;margin:0 auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:80px;background:var(--ink);color:#fff;padding:11px 16px;border-radius:11px;font-size:14.5px;z-index:80;max-width:90%}
+  .toast[hidden]{display:none}
+  .empty{text-align:center;padding:22px 8px;color:var(--soft);font-size:14.5px}
+  .warn{background:#FBF3DF;border:1px solid #E3CE92;border-radius:11px;padding:11px 12px;font-size:13.5px;margin-bottom:12px}
+  @media (prefers-reduced-motion:no-preference){.toast{animation:up .18s ease-out}@keyframes up{from{opacity:0;transform:translate(-50%,8px)}}}
+</style>
+
+<div class="wrap">
+  <div class="head">
+    <h1>Stock bodega</h1>
+    <p id="headStat"></p>
+  </div>
+  <div id="view"></div>
+</div>
+
+<nav class="tabs">
+  <button data-tab="escanear">Escanear</button>
+  <button data-tab="stock">Stock</button>
+  <button data-tab="movs">Movimientos</button>
+  <button data-tab="prod">Productos</button>
+  <button data-tab="sheets">Sheets</button>
+</nav>
+
+<div class="sheet" id="sheet" hidden><div class="inner" id="sheetInner"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ─────────── Persistencia ───────────
+   Dentro de Claude usa window.storage. Si publicás este archivo en tu propio
+   hosting (GitHub Pages, Drive, etc.) reemplazá el cuerpo de load/save por:
+     load: JSON.parse(localStorage.getItem(k) || 'null')
+     save: localStorage.setItem(k, JSON.stringify(v))
+────────────────────────────────────── */
+async function load(k){
+  try{ return JSON.parse(localStorage.getItem(k) || 'null'); }catch(e){ return null; }
+}
+async function save(k,v){
+  try{ localStorage.setItem(k, JSON.stringify(v)); }
+  catch(e){ alert('No se pudo guardar: el almacenamiento del telefono esta lleno.'); }
+}
+
+const K_PROD='inv:productos', K_MOV='inv:movimientos', K_CFG='inv:config';
+let cfg = {url:'', token:'', ultima:null};
+let productos=[], movs=[], tab='escanear', scanner=null, scanning=false;
+let sesion=[], movVista='prod', movPeriodo='hoy';
+
+const MOTIVOS = {
+  entrada:['Recepción proveedor','Producción laboratorio','Devolución BARREAU','Devolución DROPI','Ajuste de inventario','Carga inicial'],
+  salida:['Despacho BARREAU','Despacho DROPI','Traslado a laboratorio','Merma / rotura','Muestra','Ajuste de inventario']
+};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const bySku = sku => productos.find(p=>p.sku===sku);
+
+function stock(sku){
+  return movs.reduce((t,m)=> m.sku===sku ? t + (m.tipo==='entrada'? m.cant : -m.cant) : t, 0);
+}
+function estado(p){
+  const s = stock(p.sku);
+  if(s<=0) return {cls:'zero',txt:'Sin stock',s};
+  if(s<=Number(p.min||0)) return {cls:'low',txt:'Bajo mínimo',s};
+  return {cls:'ok',txt:'OK',s};
+}
+function toast(msg){
+  const t=$('#toast'); t.textContent=msg; t.hidden=false;
+  clearTimeout(t._t); t._t=setTimeout(()=>t.hidden=true,2600);
+}
+function fecha(ts){
+  const d=new Date(ts), p=n=>String(n).padStart(2,'0');
+  return {f:`${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`, h:`${p(d.getHours())}:${p(d.getMinutes())}`};
+}
+
+/* ─────────── Navegación ─────────── */
+document.querySelectorAll('.tabs button').forEach(b=>{
+  b.onclick = ()=>{ tab=b.dataset.tab; render(); };
+});
+
+function render(){
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-current', b.dataset.tab===tab));
+  const bajo = productos.filter(p=>estado(p).cls!=='ok').length;
+  $('#headStat').innerHTML = productos.length
+    ? `<span class="num">${productos.length}</span> productos · <span class="num">${bajo}</span> en alerta`
+    : '';
+  if(tab!=='escanear') stopScan();
+  ({escanear:vEscanear, stock:vStock, movs:vMovs, prod:vProd, sheets:vSheets}[tab])();
+}
+
+/* ─────────── Escanear ─────────── */
+function vEscanear(){
+  $('#view').innerHTML = `
+    <div class="panel">
+      <h2>Escanear código de barras</h2>
+      <div id="reader"></div>
+      <div class="row" style="margin-top:12px">
+        <button id="btnScan" class="big in">Encender cámara</button>
+      </div>
+      <p class="muted" style="margin:10px 0 0">Si la cámara no abre acá, la app tiene que estar publicada en una dirección https propia. Igual podés cargar todo a mano.</p>
+    </div>
+    ${panelSesion()}
+    <div class="panel">
+      <h2>Buscar a mano</h2>
+      <p class="muted" style="margin:-4px 0 8px">Para los productos que todavía no tienen etiqueta.</p>
+      <input id="q" placeholder="Nombre, SKU o código" autocomplete="off">
+      <div id="res"></div>
+    </div>`;
+  $('#btnScan').onclick = ()=> scanning ? stopScan(true) : startScan();
+  wireSesion();
+  $('#q').oninput = e=>{
+    const q=e.target.value.trim().toLowerCase();
+    const r=$('#res');
+    if(!q){ r.innerHTML=''; return; }
+    const hits = productos.filter(p =>
+      p.nombre.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) ||
+      (p.codigos||[]).some(c=>c.includes(q))
+    ).slice(0,8);
+    r.innerHTML = hits.length
+      ? hits.map(p=>{const e=estado(p);return `
+          <div class="item"><span class="dot ${e.cls}"></span>
+            <div class="grow"><div class="name">${esc(p.nombre)}</div><div class="sub">${esc(p.sku)} · ${e.s} ${esc(p.unidad||'un')}</div></div>
+            <button data-mov="${esc(p.sku)}">Mover</button>
+          </div>`}).join('')
+      : `<p class="empty">Sin resultados. Cargalo en Productos.</p>`;
+    r.querySelectorAll('[data-mov]').forEach(b=> b.onclick=()=>openMov(b.dataset.mov));
+  };
+}
+
+/* ─────────── Acumulado de la sesión ─────────── */
+function itemsSesion(){
+  return sesion.map(id=>movs.find(m=>m.id===id)).filter(Boolean);
+}
+function agrupar(lista){
+  const map = new Map();
+  lista.forEach(m=>{
+    const k = m.sku+'|'+m.tipo;
+    if(!map.has(k)) map.set(k, {sku:m.sku, tipo:m.tipo, cant:0, veces:0});
+    const g = map.get(k); g.cant += m.cant; g.veces++;
+  });
+  return [...map.values()];
+}
+function panelSesion(){
+  const items = itemsSesion();
+  if(!items.length) return `
+    <div class="panel">
+      <h2>Escaneados en esta tanda</h2>
+      <p class="empty">Acá se va armando la lista de lo que cargues, con el total acumulado por producto.</p>
+    </div>`;
+  const g = agrupar(items);
+  const unidades = items.reduce((t,m)=>t+m.cant,0);
+  return `
+    <div class="panel">
+      <h2>Escaneados en esta tanda</h2>
+      ${g.map(x=>{
+        const p=bySku(x.sku), b=Math.max(1,+p?.bulto||1);
+        const col = x.tipo==='entrada'?'var(--entrada)':'var(--salida)';
+        return `<div class="item">
+          <div class="grow"><div class="name">${esc(p?p.nombre:x.sku)}</div>
+            <div class="sub">${x.tipo==='entrada'?'Entrada':'Salida'} · ${x.veces} carga${x.veces>1?'s':''}${b>1?` · ${(x.cant/b).toFixed(x.cant%b?2:0)} bultos`:''}</div></div>
+          <div><div class="qty" style="color:${col}">${x.tipo==='entrada'?'+':'−'}${x.cant}</div>
+            <div class="sub" style="text-align:right">${esc(p?.unidad||'un')}</div></div>
+        </div>`}).join('')}
+      <div class="totalbox" style="border-top:1px solid var(--line);padding-top:11px;margin-top:2px">
+        <strong>${g.length}</strong> productos · <strong>${unidades}</strong> unidades movidas · <strong>${items.length}</strong> cargas
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="sesCopy">Copiar tanda</button>
+        <button class="ghost" id="sesClear">Empezar tanda nueva</button>
+      </div>
+    </div>`;
+}
+function wireSesion(){
+  const c=$('#sesCopy'), l=$('#sesClear');
+  if(c) c.onclick = ()=>{
+    const filas = [['SKU','Producto','Tipo','Cantidad','Unidad']].concat(
+      agrupar(itemsSesion()).map(x=>{const p=bySku(x.sku);return [x.sku,p?p.nombre:'',x.tipo,x.cant,p?.unidad||'un']}));
+    copiar(filas.map(r=>r.map(cell).join(',')).join('\n'), 'Tanda copiada');
+  };
+  if(l) l.onclick = ()=>{
+    if(!confirm('¿Empezar una tanda nueva? Los movimientos quedan guardados, solo se limpia esta lista.')) return;
+    sesion=[]; render(); toast('Tanda nueva');
+  };
+}
+
+async function startScan(){
+  if(typeof Html5Qrcode==='undefined'){ toast('No se pudo cargar el lector'); return; }
+  const F = window.Html5QrcodeSupportedFormats || {};
+  const formats = ['EAN_13','EAN_8','UPC_A','UPC_E','CODE_128','CODE_39','ITF','QR_CODE']
+    .map(n=>F[n]).filter(v=>v!==undefined);
+  try{
+    scanner = new Html5Qrcode('reader', {formatsToSupport: formats.length?formats:undefined, verbose:false});
+    await scanner.start({facingMode:'environment'}, {fps:10, qrbox:{width:260,height:150}}, onScan, ()=>{});
+    scanning = true; $('#btnScan').textContent='Apagar cámara'; $('#btnScan').className='big out';
+  }catch(e){
+    toast('La cámara no está disponible acá');
+  }
+}
+async function stopScan(manual){
+  if(!scanner||!scanning) return;
+  try{ await scanner.stop(); scanner.clear(); }catch(e){}
+  scanning=false;
+  const b=$('#btnScan'); if(b && manual!==undefined){ b.textContent='Encender cámara'; b.className='big in'; }
+}
+function onScan(code){
+  if(navigator.vibrate) navigator.vibrate(60);
+  stopScan();
+  const b=$('#btnScan'); if(b){ b.textContent='Encender cámara'; b.className='big in'; }
+  const p = productos.find(x=>(x.codigos||[]).includes(code));
+  p ? openMov(p.sku, null, 'scan') : openDesconocido(code);
+}
+
+/* ─────────── Hoja de movimiento ─────────── */
+function openSheet(html){
+  $('#sheetInner').innerHTML = html;
+  $('#sheet').hidden = false;
+  $('#sheet').onclick = e => { if(e.target.id==='sheet') closeSheet(); };
+}
+function closeSheet(){ $('#sheet').hidden = true; }
+
+function openMov(sku, tipoIni, origen){
+  const p = bySku(sku); if(!p) return;
+  const bulto = Math.max(1, Number(p.bulto)||1);
+  const e = estado(p);
+  let tipo = tipoIni || 'salida';
+  openSheet(`
+    <h2 style="margin:2px 0 2px;font-size:19px">${esc(p.nombre)}</h2>
+    <p class="muted" style="margin:0 0 14px">${esc(p.sku)} · ${esc(p.ubicacion||'sin ubicación')} · stock <span class="num">${e.s}</span> ${esc(p.unidad||'un')}</p>
+    <div class="seg">
+      <button class="in" id="tIn" aria-pressed="false">Entrada</button>
+      <button class="out" id="tOut" aria-pressed="true">Salida</button>
+    </div>
+    <label for="cant">Cantidad en ${esc(p.unidad||'un')}</label>
+    <div class="stepper">
+      <button id="menos" aria-label="Restar uno">−</button>
+      <input id="cant" type="number" inputmode="numeric" pattern="[0-9]*" value="1" min="0">
+      <button id="mas" aria-label="Sumar uno">+</button>
+    </div>
+    <div class="chips">
+      ${bulto>1?`<button class="wide" data-add="${bulto}">+1 bulto (${bulto})</button>`:''}
+      ${[6,12,24].filter(n=>n!==bulto).map(n=>`<button data-add="${n}">+${n}</button>`).join('')}
+      <button class="clear" data-set="0">Borrar</button>
+    </div>
+    <div class="totalbox" id="tot"></div>
+    <label for="motivo">Motivo</label>
+    <select id="motivo"></select>
+    <label for="nota">Nota <span style="font-weight:400">(pedido, vendedora, guía…)</span></label>
+    <input id="nota" placeholder="Opcional">
+    <div class="row" style="margin-top:16px">
+      <button class="ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="big out" id="guardar">Guardar salida</button>
+    </div>`);
+
+  const paint = ()=>{
+    $('#tIn').setAttribute('aria-pressed', tipo==='entrada');
+    $('#tOut').setAttribute('aria-pressed', tipo==='salida');
+    $('#motivo').innerHTML = MOTIVOS[tipo].map(m=>`<option>${m}</option>`).join('');
+    const g=$('#guardar');
+    g.textContent = tipo==='entrada' ? 'Guardar entrada' : 'Guardar salida';
+    g.className = 'big ' + (tipo==='entrada'?'in':'out');
+  };
+  $('#tIn').onclick=()=>{tipo='entrada';paint();total()};
+  $('#tOut').onclick=()=>{tipo='salida';paint();total()};
+  const c = $('#cant');
+  const total = ()=>{
+    const n = Math.abs(parseInt(c.value,10)||0);
+    let txt = `Quedan <strong>${tipo==='entrada' ? e.s+n : e.s-n}</strong> ${esc(p.unidad||'un')} en stock`;
+    if(bulto>1 && n) txt += ` · son ${(n/bulto).toFixed(n%bulto?1:0)} bultos de ${bulto}`;
+    $('#tot').innerHTML = txt;
+  };
+  $('#menos').onclick=()=>{c.value=Math.max(0,(+c.value||0)-1);total()};
+  $('#mas').onclick=()=>{c.value=(+c.value||0)+1;total()};
+  c.oninput = total;
+  document.querySelectorAll('[data-add]').forEach(b=> b.onclick=()=>{c.value=(+c.value||0)+ +b.dataset.add;total()});
+  document.querySelectorAll('[data-set]').forEach(b=> b.onclick=()=>{c.value=b.dataset.set;total();c.focus();c.select()});
+  paint(); total();
+  setTimeout(()=>{ c.focus(); c.select(); },120);
+
+  $('#guardar').onclick = async ()=>{
+    const cant = Math.abs(parseInt($('#cant').value,10)||0);
+    if(!cant){ toast('Poné una cantidad'); return; }
+    if(tipo==='salida' && cant>e.s && !confirm(`Hay ${e.s} en stock y estás sacando ${cant}. ¿Guardar igual?`)) return;
+    const nuevo = {id:uid(), ts:Date.now(), sku:p.sku, tipo, cant, motivo:$('#motivo').value, nota:$('#nota').value.trim()};
+    movs.unshift(nuevo);
+    sesion.unshift(nuevo.id);
+    await save(K_MOV, movs);
+    closeSheet();
+    toast(`${tipo==='entrada'?'Entrada':'Salida'} de ${cant} ${p.unidad||'un'} · ${p.nombre} · quedan ${stock(p.sku)}`);
+    render();
+    if(origen==='scan' && tab==='escanear') setTimeout(startScan, 350);
+  };
+}
+
+function skuAuto(nombre){
+  let base = nombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toUpperCase().replace(/[^A-Z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,20) || 'PROD';
+  let sku = base, n = 2;
+  while(bySku(sku)) sku = base+'-'+(n++);
+  return sku;
+}
+function openDesconocido(code){
+  openSheet(`
+    <h2 style="margin:2px 0 6px;font-size:19px">Código nuevo</h2>
+    <p class="muted" style="margin:0 0 14px">Leí <strong class="num">${esc(code)}</strong> y todavía no sé qué producto es. Decime el nombre una sola vez y los próximos escaneos lo reconocen solo.</p>
+
+    <label for="dnNom">Nombre del producto</label>
+    <input id="dnNom" placeholder="Ej: Perfume Ámbar 100ml" autocomplete="off">
+    <div class="row">
+      <div><label for="dnU">Unidad</label><input id="dnU" value="un"></div>
+      <div><label for="dnB">Unid. por bulto</label><input id="dnB" type="number" inputmode="numeric" value="1"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="big in" id="dnCrear">Crear y cargar cantidad</button>
+    </div>
+    <p class="muted" style="margin:10px 0 0">El SKU y la ubicación se completan después desde Productos.</p>
+
+    <div style="border-top:1px solid var(--line);margin:16px 0 0;padding-top:14px">
+      <p class="muted" style="margin:0 0 8px">¿O es un producto que ya tenés cargado, pero sin este código?</p>
+      <input id="qa" placeholder="Buscar para asociarle este código" autocomplete="off">
+      <div id="resa"></div>
+    </div>
+    <button class="link" onclick="closeSheet()" style="margin-top:10px">Cancelar</button>`);
+
+  $('#dnCrear').onclick = async ()=>{
+    const nombre = $('#dnNom').value.trim();
+    if(!nombre){ toast('Escribí el nombre del producto'); return; }
+    const sku = skuAuto(nombre);
+    productos.push({nombre, sku, codigos:[code], unidad:$('#dnU').value.trim()||'un',
+      bulto:Math.max(1,+$('#dnB').value||1), min:0, ubicacion:''});
+    await save(K_PROD, productos);
+    closeSheet(); toast(`${nombre} creado y asociado al código`);
+    openMov(sku, 'entrada', 'scan');
+  };
+  setTimeout(()=>{ const i=$('#dnNom'); if(i) i.focus(); },150);
+
+  $('#qa').oninput = e=>{
+    const q=e.target.value.trim().toLowerCase(), r=$('#resa');
+    if(!q){ r.innerHTML=''; return; }
+    const hits = productos.filter(p=>p.nombre.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)).slice(0,6);
+    r.innerHTML = hits.map(p=>`
+      <div class="item"><div class="grow"><div class="name">${esc(p.nombre)}</div><div class="sub">${esc(p.sku)}</div></div>
+      <button data-link="${esc(p.sku)}">Asociar</button></div>`).join('');
+    r.querySelectorAll('[data-link]').forEach(b=> b.onclick = async ()=>{
+      const p = bySku(b.dataset.link);
+      p.codigos = [...(p.codigos||[]), code];
+      await save(K_PROD, productos);
+      closeSheet(); toast(`Código asociado a ${p.nombre}`); openMov(p.sku, null, 'scan');
+    });
+  };
+}
+
+/* ─────────── Stock ─────────── */
+function vStock(){
+  if(!productos.length){ return emptyProd(); }
+  const orden = [...productos].sort((a,b)=>{
+    const r={zero:0,low:1,ok:2};
+    return r[estado(a).cls]-r[estado(b).cls] || a.nombre.localeCompare(b.nombre);
+  });
+  $('#view').innerHTML = `
+    <div class="panel">
+      <h2>Stock actual</h2>
+      ${orden.map(p=>{const e=estado(p);return `
+        <div class="item"><span class="dot ${e.cls}" title="${e.txt}"></span>
+          <div class="grow"><div class="name">${esc(p.nombre)}</div>
+            <div class="sub">${esc(p.sku)} · mín ${p.min||0} · ${esc(p.ubicacion||'sin ubicación')}</div></div>
+          <div><div class="qty">${e.s}</div><div class="sub" style="text-align:right">${esc(p.unidad||'un')}</div></div>
+          <button data-mov="${esc(p.sku)}">Mover</button>
+        </div>`}).join('')}
+    </div>
+    <div class="panel">
+      <h2>Exportar a Sheets</h2>
+      <div class="row"><button id="expStock">Copiar stock</button><button id="expMovs">Copiar movimientos</button></div>
+      <p class="muted" style="margin:10px 0 0">Se copia en formato CSV: pegá en tu planilla y usá Datos → Dividir texto en columnas.</p>
+    </div>`;
+  $('#view').querySelectorAll('[data-mov]').forEach(b=> b.onclick=()=>openMov(b.dataset.mov));
+  $('#expStock').onclick = ()=> copiar(csvStock(), 'Stock copiado');
+  $('#expMovs').onclick = ()=> copiar(csvMovs(), 'Movimientos copiados');
+}
+
+/* ─────────── Movimientos ─────────── */
+function enPeriodo(m){
+  if(movPeriodo==='todo') return true;
+  const d=new Date(m.ts), h=new Date();
+  if(movPeriodo==='hoy') return d.toDateString()===h.toDateString();
+  return m.ts >= h.getTime() - 7*864e5;
+}
+function vMovs(){
+  const lista = movs.filter(enPeriodo);
+  const per = [['hoy','Hoy'],['semana','7 días'],['todo','Todo']];
+  const vis = [['prod','Total por producto'],['cron','Uno por uno']];
+
+  let cuerpo;
+  if(!lista.length){
+    cuerpo = `<p class="empty">No hay movimientos en este período.</p>`;
+  }else if(movVista==='prod'){
+    const skus = [...new Set(lista.map(m=>m.sku))];
+    const filas = skus.map(sku=>{
+      const ent = lista.filter(m=>m.sku===sku&&m.tipo==='entrada').reduce((t,m)=>t+m.cant,0);
+      const sal = lista.filter(m=>m.sku===sku&&m.tipo==='salida').reduce((t,m)=>t+m.cant,0);
+      return {sku, ent, sal, neto:ent-sal};
+    }).sort((a,b)=> (b.ent+b.sal)-(a.ent+a.sal));
+    const tEnt = filas.reduce((t,f)=>t+f.ent,0), tSal = filas.reduce((t,f)=>t+f.sal,0);
+    cuerpo = filas.map(f=>{
+      const p=bySku(f.sku), b=Math.max(1,+p?.bulto||1);
+      return `<div class="item">
+        <div class="grow"><div class="name">${esc(p?p.nombre:f.sku)}</div>
+          <div class="sub">+${f.ent} entradas · −${f.sal} salidas${b>1?` · ${(Math.abs(f.neto)/b).toFixed(Math.abs(f.neto)%b?2:0)} bultos`:''} · stock ${stock(f.sku)}</div></div>
+        <div class="qty" style="color:${f.neto<0?'var(--salida)':'var(--entrada)'}">${f.neto>0?'+':f.neto<0?'−':''}${Math.abs(f.neto)}</div>
+      </div>`}).join('') + `
+      <div class="totalbox" style="border-top:1px solid var(--line);padding-top:11px">
+        <strong>${filas.length}</strong> productos · entradas <strong>+${tEnt}</strong> · salidas <strong>−${tSal}</strong> · neto <strong>${tEnt-tSal>0?'+':''}${tEnt-tSal}</strong>
+      </div>`;
+  }else{
+    cuerpo = lista.slice(0,80).map(m=>{
+      const p=bySku(m.sku), d=fecha(m.ts);
+      const col=m.tipo==='entrada'?'var(--entrada)':'var(--salida)';
+      return `<div class="item">
+        <div class="grow"><div class="name">${esc(p?p.nombre:m.sku)}</div>
+          <div class="sub">${d.f} ${d.h} · ${esc(m.motivo)}${m.nota?' · '+esc(m.nota):''}</div></div>
+        <div class="qty" style="color:${col}">${m.tipo==='entrada'?'+':'−'}${m.cant}</div>
+        <button class="link danger" data-del="${m.id}">Anular</button>
+      </div>`}).join('');
+  }
+
+  $('#view').innerHTML = `
+    <div class="panel">
+      <div class="chips" style="margin:0 0 10px">
+        ${per.map(([v,t])=>`<button data-per="${v}" ${movPeriodo===v?'style="background:var(--ink);color:#fff;border-color:var(--ink)"':''}>${t}</button>`).join('')}
+      </div>
+      <div class="seg">
+        ${vis.map(([v,t])=>`<button data-vis="${v}" class="in" aria-pressed="${movVista===v}">${t}</button>`).join('')}
+      </div>
+    </div>
+    <div class="panel">${cuerpo}</div>`;
+
+  $('#view').querySelectorAll('[data-per]').forEach(b=> b.onclick=()=>{movPeriodo=b.dataset.per;render()});
+  $('#view').querySelectorAll('[data-vis]').forEach(b=> b.onclick=()=>{movVista=b.dataset.vis;render()});
+  $('#view').querySelectorAll('[data-del]').forEach(b=> b.onclick = async ()=>{
+    if(!confirm('¿Anular este movimiento? Se borra del historial.')) return;
+    movs = movs.filter(m=>m.id!==b.dataset.del);
+    sesion = sesion.filter(id=>id!==b.dataset.del);
+    await save(K_MOV, movs); toast('Movimiento anulado'); render();
+  });
+}
+
+/* ─────────── Productos ─────────── */
+function emptyProd(){
+  $('#view').innerHTML = `
+    <div class="panel">
+      <h2>Todavía no hay productos</h2>
+      <p class="muted">Cargá el primero a mano, o pegá el listado que ya tenés en tu planilla.</p>
+      <div class="row" style="margin-top:12px">
+        <button class="big in" id="nuevo">Cargar producto</button>
+      </div>
+      <button class="link" id="imp">Pegar listado desde Sheets</button>
+    </div>`;
+  $('#nuevo').onclick=()=>openProdForm();
+  $('#imp').onclick=openImport;
+}
+function vProd(){
+  if(!productos.length) return emptyProd();
+  $('#view').innerHTML = `
+    <div class="panel">
+      <div class="row"><button class="big in" id="nuevo">Cargar producto</button></div>
+      <button class="link" id="imp">Pegar listado desde Sheets</button>
+    </div>
+    <div class="panel">
+      <h2>Productos</h2>
+      ${[...productos].sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=>`
+        <div class="item"><div class="grow"><div class="name">${esc(p.nombre)}</div>
+          <div class="sub">${esc(p.sku)} · ${(p.codigos||[]).length?esc((p.codigos||[]).join(', ')):'sin código de barras'}</div></div>
+          <button data-edit="${esc(p.sku)}">Editar</button></div>`).join('')}
+    </div>`;
+  $('#nuevo').onclick=()=>openProdForm();
+  $('#imp').onclick=openImport;
+  $('#view').querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=>openProdForm(b.dataset.edit));
+}
+
+function openProdForm(sku, codigoPre){
+  const p = sku ? bySku(sku) : null;
+  openSheet(`
+    <h2 style="margin:2px 0 10px;font-size:19px">${p?'Editar producto':'Nuevo producto'}</h2>
+    <label for="fN">Nombre</label><input id="fN" value="${esc(p?.nombre||'')}">
+    <label for="fS">SKU / código interno</label><input id="fS" value="${esc(p?.sku||'')}">
+    <label for="fC">Código de barras <span style="font-weight:400">(varios separados por coma)</span></label>
+    <input id="fC" inputmode="numeric" value="${esc((p?.codigos||(codigoPre?[codigoPre]:[])).join(', '))}">
+    <div class="row">
+      <div><label for="fU">Unidad</label><input id="fU" value="${esc(p?.unidad||'un')}"></div>
+      <div><label for="fB">Unidades por bulto</label><input id="fB" type="number" inputmode="numeric" value="${esc(p?.bulto??1)}"></div>
+    </div>
+    <label for="fM">Stock mínimo</label><input id="fM" type="number" inputmode="numeric" value="${esc(p?.min??0)}">
+    <label for="fL">Ubicación</label><input id="fL" value="${esc(p?.ubicacion||'')}" placeholder="Estante, rack, sector">
+    ${p?'':`<label for="fI">Stock inicial</label><input id="fI" type="number" inputmode="numeric" value="0">`}
+    <div class="row" style="margin-top:16px">
+      <button class="ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="big in" id="fG">Guardar producto</button>
+    </div>
+    ${p?`<button class="link danger" id="fD" style="margin-top:8px">Borrar producto y sus movimientos</button>`:''}`);
+
+  $('#fG').onclick = async ()=>{
+    const nombre=$('#fN').value.trim(), nsku=$('#fS').value.trim();
+    if(!nombre||!nsku){ toast('Nombre y SKU son obligatorios'); return; }
+    if(!p && bySku(nsku)){ toast('Ese SKU ya existe'); return; }
+    const codigos = $('#fC').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const datos = {nombre, sku:nsku, codigos, unidad:$('#fU').value.trim()||'un',
+      bulto:Math.max(1,+$('#fB').value||1), min:+$('#fM').value||0, ubicacion:$('#fL').value.trim()};
+    if(p){
+      const viejo = p.sku;
+      Object.assign(p, datos);
+      if(viejo!==nsku) movs.forEach(m=>{ if(m.sku===viejo) m.sku=nsku; });
+      await save(K_MOV, movs);
+    }else{
+      productos.push(datos);
+      const ini = +$('#fI').value||0;
+      if(ini>0){ movs.unshift({id:uid(), ts:Date.now(), sku:nsku, tipo:'entrada', cant:ini, motivo:'Carga inicial', nota:''}); await save(K_MOV, movs); }
+    }
+    await save(K_PROD, productos);
+    closeSheet(); toast('Producto guardado'); render();
+  };
+  if(p) $('#fD').onclick = async ()=>{
+    if(!confirm(`¿Borrar ${p.nombre} y todos sus movimientos?`)) return;
+    productos = productos.filter(x=>x.sku!==p.sku);
+    movs = movs.filter(m=>m.sku!==p.sku);
+    await save(K_PROD, productos); await save(K_MOV, movs);
+    closeSheet(); toast('Producto borrado'); render();
+  };
+}
+
+function openImport(){
+  openSheet(`
+    <h2 style="margin:2px 0 6px;font-size:19px">Pegar listado</h2>
+    <p class="muted" style="margin:0 0 10px">Una fila por producto, con este orden de columnas (podés copiar directo de Sheets):</p>
+    <p class="muted" style="margin:0 0 10px"><strong>SKU · Nombre · Código de barras · Unidad · Unid. por bulto · Stock mínimo · Ubicación · Stock actual</strong></p>
+    <textarea id="imTxt" style="min-height:150px" placeholder="PF-001&#9;Perfume Ámbar 100ml&#9;7791234567890&#9;un&#9;12&#9;24&#9;Rack A2&#9;480"></textarea>
+    <div class="row" style="margin-top:14px">
+      <button class="ghost" onclick="closeSheet()">Cancelar</button>
+      <button class="big in" id="imGo">Importar</button>
+    </div>`);
+  $('#imGo').onclick = async ()=>{
+    const lineas = $('#imTxt').value.split('\n').map(l=>l.trim()).filter(Boolean);
+    let nuevos=0, salteados=0;
+    for(const l of lineas){
+      const c = l.split(/\t|;|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(s=>s.trim().replace(/^"|"$/g,''));
+      const [sku,nombre,cod,unidad,blt,min,ubic,stk] = c;
+      if(!sku||!nombre||/^sku$/i.test(sku)){ salteados++; continue; }
+      if(bySku(sku)){ salteados++; continue; }
+      productos.push({nombre, sku, codigos:cod?[cod]:[], unidad:unidad||'un',
+        bulto:Math.max(1,+blt||1), min:+min||0, ubicacion:ubic||''});
+      const ini = +stk||0;
+      if(ini>0) movs.unshift({id:uid(), ts:Date.now(), sku, tipo:'entrada', cant:ini, motivo:'Carga inicial', nota:'Importado'});
+      nuevos++;
+    }
+    await save(K_PROD, productos); await save(K_MOV, movs);
+    closeSheet(); toast(`${nuevos} productos importados${salteados?`, ${salteados} salteados`:''}`); render();
+  };
+}
+
+
+/* ─────────── Conexión con Google Sheets ─────────── */
+function pendientes(){ return movs.filter(m=>!m.sync); }
+
+function vSheets(){
+  const pend = pendientes().length;
+  const u = cfg.ultima ? fecha(cfg.ultima) : null;
+  $('#view').innerHTML = `
+    <div class="panel">
+      <h2>Movimientos por subir</h2>
+      <div class="totalbox" style="margin:0">
+        <strong>${pend}</strong> movimientos sin subir${u?` · última subida ${u.f} ${u.h}`:''}
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="big in" id="push" ${cfg.url?'':'disabled style="opacity:.45"'}>Subir a Sheets</button>
+      </div>
+      <button class="link" id="pull" ${cfg.url?'':'style="opacity:.45;pointer-events:none"'}>Traer productos desde Sheets</button>
+    </div>
+
+    <div class="panel">
+      <h2>Conexión</h2>
+      <label for="cU">Dirección del Web App</label>
+      <input id="cU" value="${esc(cfg.url)}" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      <label for="cT">Clave</label>
+      <input id="cT" value="${esc(cfg.token)}" placeholder="La misma que pusiste en el script" autocomplete="off">
+      <div class="row" style="margin-top:14px">
+        <button id="cG">Guardar conexión</button>
+        <button class="ghost" id="cP" ${cfg.url?'':'disabled style="opacity:.45"'}>Probar</button>
+      </div>
+      <p class="muted" style="margin:10px 0 0">Mientras no haya conexión configurada, seguí usando los botones de copiar y pegar en la planilla. Los movimientos no se pierden: quedan como pendientes hasta que los subas.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Copiar y pegar</h2>
+      <div class="row"><button id="expStock2">Copiar stock</button><button id="expMovs2">Copiar movimientos</button></div>
+    </div>`;
+
+  $('#cG').onclick = async ()=>{
+    cfg.url = $('#cU').value.trim(); cfg.token = $('#cT').value.trim();
+    await save(K_CFG, cfg); toast('Conexión guardada'); render();
+  };
+  const p = $('#cP'); if(p) p.onclick = probar;
+  const b = $('#push'); if(b) b.onclick = subir;
+  const l = $('#pull'); if(l) l.onclick = bajar;
+  $('#expStock2').onclick = ()=> copiar(csvStock(), 'Stock copiado');
+  $('#expMovs2').onclick = ()=> copiar(csvMovs(), 'Movimientos copiados');
+}
+
+async function pedir(params, body){
+  const url = cfg.url + (cfg.url.includes('?')?'&':'?') + new URLSearchParams({token:cfg.token, ...params});
+  const opt = body
+    ? {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body), redirect:'follow'}
+    : {method:'GET', redirect:'follow'};
+  const r = await fetch(url, opt);
+  const txt = await r.text();
+  try{ return JSON.parse(txt); }
+  catch(e){ throw new Error('Respuesta inesperada del script'); }
+}
+
+async function probar(){
+  toast('Probando…');
+  try{
+    const r = await pedir({action:'ping'});
+    toast(r.ok ? `Conectado a "${r.planilla}"` : 'El script respondió: '+(r.error||'error'));
+  }catch(e){ toast('No se pudo conectar. Revisá la dirección y la clave.'); }
+}
+
+async function bajar(){
+  if(!confirm('Traer el maestro de productos desde PARAMETROS. Se actualizan los que ya tenés y se agregan los nuevos. No borra movimientos.')) return;
+  toast('Trayendo productos…');
+  try{
+    const r = await pedir({action:'productos'});
+    if(!r.ok) throw new Error(r.error||'error');
+    let nuevos=0, act=0;
+    r.productos.forEach(x=>{
+      if(!x.sku || !x.nombre) return;
+      const ex = bySku(x.sku);
+      if(ex){
+        ex.nombre=x.nombre; ex.unidad=x.unidad||ex.unidad; ex.bulto=Math.max(1,+x.bulto||1);
+        ex.min=+x.min||0; ex.ubicacion=x.ubicacion||ex.ubicacion;
+        if(x.codigo && !(ex.codigos||[]).includes(x.codigo)) ex.codigos=[...(ex.codigos||[]), x.codigo];
+        act++;
+      }else{
+        productos.push({sku:x.sku, nombre:x.nombre, codigos:x.codigo?[String(x.codigo)]:[],
+          unidad:x.unidad||'un', bulto:Math.max(1,+x.bulto||1), min:+x.min||0, ubicacion:x.ubicacion||''});
+        nuevos++;
+      }
+    });
+    await save(K_PROD, productos);
+    toast(`${nuevos} nuevos · ${act} actualizados`); render();
+  }catch(e){ toast('No se pudieron traer los productos: '+e.message); }
+}
+
+async function subir(){
+  const pend = pendientes();
+  if(!pend.length){ toast('No hay nada pendiente'); return; }
+  toast(`Subiendo ${pend.length}…`);
+  const lote = pend.map(m=>{
+    const p=bySku(m.sku), d=fecha(m.ts);
+    return {id:m.id, fecha:d.f, hora:d.h, sku:m.sku, producto:p?p.nombre:'', tipo:m.tipo,
+            cantidad:m.cant, motivo:m.motivo, nota:m.nota||''};
+  });
+  try{
+    const r = await pedir({action:'movimientos'}, {movimientos:lote});
+    if(!r.ok) throw new Error(r.error||'error');
+    const ok = new Set(r.guardados||lote.map(x=>x.id));
+    movs.forEach(m=>{ if(ok.has(m.id)) m.sync = true; });
+    cfg.ultima = Date.now();
+    await save(K_MOV, movs); await save(K_CFG, cfg);
+    toast(`${ok.size} movimientos en la planilla`); render();
+  }catch(e){
+    toast('No se pudo subir. Quedan pendientes, probá de nuevo con señal.');
+  }
+}
+
+/* ─────────── Exportar ─────────── */
+const cell = v => /[",;\t\n]/.test(String(v??'')) ? `"${String(v).replace(/"/g,'""')}"` : String(v??'');
+function csvStock(){
+  const h=['SKU','Producto','Ubicacion','Unidad','Stock','Unid x bulto','Bultos','Minimo','Estado'];
+  return [h, ...productos.map(p=>{const e=estado(p), b=Math.max(1,+p.bulto||1);
+    return [p.sku,p.nombre,p.ubicacion,p.unidad,e.s,b,(e.s/b).toFixed(b>1?2:0),p.min||0,e.txt]})]
+    .map(r=>r.map(cell).join(',')).join('\n');
+}
+function csvMovs(){
+  const h=['Fecha','Hora','SKU','Producto','Tipo','Cantidad','Motivo','Nota'];
+  return [h, ...movs.map(m=>{const p=bySku(m.sku), d=fecha(m.ts);
+    return [d.f,d.h,m.sku,p?p.nombre:'',m.tipo,m.cant,m.motivo,m.nota]})]
+    .map(r=>r.map(cell).join(',')).join('\n');
+}
+async function copiar(txt,ok){
+  try{ await navigator.clipboard.writeText(txt); toast(ok); }
+  catch(e){
+    const t=document.createElement('textarea'); t.value=txt; document.body.appendChild(t);
+    t.select(); document.execCommand('copy'); t.remove(); toast(ok);
+  }
+}
+
+/* ─────────── Arranque ─────────── */
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+
+(async ()=>{
+  cfg = (await load(K_CFG)) || cfg;
+  productos = (await load(K_PROD)) || [];
+  movs = (await load(K_MOV)) || [];
+  render();
+})();
+</script>
