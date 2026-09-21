@@ -1,6 +1,6 @@
 /* Stock Bodega — cache para uso sin señal.
    Subi la version cada vez que edites index.html, asi el telefono toma los cambios. */
-const VERSION = 'stock-v1';
+const VERSION = 'stock-v2';
 const BASE = [
   './',
   './index.html',

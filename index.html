@@ -73,6 +73,19 @@
   .stepper button{border:none;background:none;font-size:24px;width:56px;padding:12px 0;line-height:1}
   .stepper input{border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);border-radius:0;text-align:center;font-size:24px;font-weight:700;padding:12px 0}
 
+  /* fotos */
+  .thumb{width:46px;height:46px;border-radius:9px;object-fit:cover;background:#DCE0DA;flex:none;border:1px solid var(--line)}
+  .thumb.chica{width:34px;height:34px;border-radius:7px}
+  .sinfoto{display:flex;align-items:center;justify-content:center;font-size:17px;color:#9AA39B}
+  .fotogrande{width:100%;max-height:34vh;object-fit:contain;border-radius:12px;background:#DCE0DA;border:1px solid var(--line);display:block}
+  .galeria{display:grid;grid-template-columns:repeat(auto-fill,minmax(102px,1fr));gap:10px;margin-top:4px}
+  .pieza{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;text-align:left;padding:0;display:block}
+  .pieza img,.pieza .ph{width:100%;aspect-ratio:1;object-fit:cover;display:block;background:#DCE0DA}
+  .pieza .ph{display:flex;align-items:center;justify-content:center;font-size:22px;color:#9AA39B}
+  .pieza .cap{padding:7px 8px 8px}
+  .pieza .cap b{display:block;font-size:12.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pieza .cap span{font-size:11.5px;color:var(--soft)}
+  .unica{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;background:#E9DFF0;color:#5B3A78;vertical-align:middle}
   .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
   .chips button{padding:9px 13px;font-size:14.5px;font-weight:600;border-radius:999px;background:#fff}
   .chips button.wide{flex:1}
@@ -133,9 +146,97 @@ async function save(k,v){
 }
 
 const K_PROD='inv:productos', K_MOV='inv:movimientos', K_CFG='inv:config';
+
+/* ─────────── Fotos ───────────
+   Van en IndexedDB, no en el almacenamiento comun: una foto pesa mucho mas que
+   un movimiento y ahi hay espacio de sobra. En memoria queda solo la miniatura
+   que se esta mostrando. */
+let bd = null, fotoCache = {};
+
+function abrirBD(){
+  return new Promise((ok, mal)=>{
+    if(bd) return ok(bd);
+    const req = indexedDB.open('inv-fotos', 1);
+    req.onupgradeneeded = ()=> req.result.createObjectStore('fotos');
+    req.onsuccess = ()=>{ bd = req.result; ok(bd); };
+    req.onerror = ()=> mal(req.error);
+  });
+}
+async function guardarFoto(sku, dataUrl){
+  const db = await abrirBD();
+  return new Promise((ok, mal)=>{
+    const t = db.transaction('fotos','readwrite');
+    t.objectStore('fotos').put(dataUrl, sku);
+    t.oncomplete = ()=>{ fotoCache[sku] = dataUrl; ok(true); };
+    t.onerror = ()=> mal(t.error);
+  });
+}
+async function traerFoto(sku){
+  if(sku in fotoCache) return fotoCache[sku];
+  try{
+    const db = await abrirBD();
+    const dato = await new Promise((ok, mal)=>{
+      const r = db.transaction('fotos').objectStore('fotos').get(sku);
+      r.onsuccess = ()=> ok(r.result || null);
+      r.onerror = ()=> mal(r.error);
+    });
+    fotoCache[sku] = dato;
+    return dato;
+  }catch(e){ return null; }
+}
+async function borrarFoto(sku){
+  try{
+    const db = await abrirBD();
+    db.transaction('fotos','readwrite').objectStore('fotos').delete(sku);
+    delete fotoCache[sku];
+  }catch(e){}
+}
+async function precargarFotos(){
+  try{
+    const db = await abrirBD();
+    const claves = await new Promise((ok,mal)=>{
+      const r = db.transaction('fotos').objectStore('fotos').getAllKeys();
+      r.onsuccess = ()=> ok(r.result||[]); r.onerror = ()=> mal(r.error);
+    });
+    for(const k of claves) await traerFoto(k);
+  }catch(e){}
+}
+
+/* Reduce la foto antes de guardarla: 700 px de lado mayor y JPEG al 72%.
+   Una foto de camara pasa de ~4 MB a ~70 KB, que es lo que hace viable
+   tener cientos de piezas en el telefono y subirlas sin esperar. */
+function reducir(file, lado){
+  return new Promise((ok, mal)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const esc = Math.min(1, lado / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * esc);
+        c.height = Math.round(img.height * esc);
+        const cx = c.getContext('2d');
+        cx.fillStyle = '#fff'; cx.fillRect(0,0,c.width,c.height);
+        cx.drawImage(img, 0, 0, c.width, c.height);
+        ok(c.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = ()=> mal(new Error('No se pudo leer la imagen'));
+      img.src = fr.result;
+    };
+    fr.onerror = ()=> mal(new Error('No se pudo abrir el archivo'));
+    fr.readAsDataURL(file);
+  });
+}
+
+function thumb(sku, clase){
+  const f = fotoCache[sku];
+  return f
+    ? `<img class="thumb ${clase||''}" src="${f}" alt="">`
+    : `<div class="thumb sinfoto ${clase||''}">◇</div>`;
+}
 let cfg = {url:'', token:'', ultima:null};
 let productos=[], movs=[], tab='escanear', scanner=null, scanning=false;
-let sesion=[], movVista='prod', movPeriodo='hoy';
+let sesion=[], movVista='prod', movPeriodo='hoy', prodVista='galeria';
 
 const MOTIVOS = {
   entrada:['Recepción proveedor','Producción laboratorio','Devolución BARREAU','Devolución DROPI','Ajuste de inventario','Carga inicial'],
@@ -210,8 +311,8 @@ function vEscanear(){
     ).slice(0,8);
     r.innerHTML = hits.length
       ? hits.map(p=>{const e=estado(p);return `
-          <div class="item"><span class="dot ${e.cls}"></span>
-            <div class="grow"><div class="name">${esc(p.nombre)}</div><div class="sub">${esc(p.sku)} · ${e.s} ${esc(p.unidad||'un')}</div></div>
+          <div class="item"><span class="dot ${e.cls}"></span>${thumb(p.sku)}
+            <div class="grow"><div class="name">${esc(p.nombre)}${p.unica?' <span class="unica">única</span>':''}</div><div class="sub">${esc(p.sku)} · ${e.s} ${esc(p.unidad||'un')}</div></div>
             <button data-mov="${esc(p.sku)}">Mover</button>
           </div>`}).join('')
       : `<p class="empty">Sin resultados. Cargalo en Productos.</p>`;
@@ -316,7 +417,8 @@ function openMov(sku, tipoIni, origen){
   const e = estado(p);
   let tipo = tipoIni || 'salida';
   openSheet(`
-    <h2 style="margin:2px 0 2px;font-size:19px">${esc(p.nombre)}</h2>
+    ${fotoCache[p.sku] ? `<img class="fotogrande" src="${fotoCache[p.sku]}" alt="" style="margin-bottom:12px">` : ''}
+    <h2 style="margin:2px 0 2px;font-size:19px">${esc(p.nombre)}${p.unica?' <span class="unica">única</span>':''}</h2>
     <p class="muted" style="margin:0 0 14px">${esc(p.sku)} · ${esc(p.ubicacion||'sin ubicación')} · stock <span class="num">${e.s}</span> ${esc(p.unidad||'un')}</p>
     <div class="seg">
       <button class="in" id="tIn" aria-pressed="false">Entrada</button>
@@ -354,6 +456,12 @@ function openMov(sku, tipoIni, origen){
   $('#tIn').onclick=()=>{tipo='entrada';paint();total()};
   $('#tOut').onclick=()=>{tipo='salida';paint();total()};
   const c = $('#cant');
+  if(p.unica){                                        // una sola pieza: la cantidad no se discute
+    c.value = 1; c.readOnly = true;
+    const chips = document.querySelector('.chips'); if(chips) chips.remove();
+    const men = $('#menos'), mas = $('#mas');
+    if(men) men.disabled = true; if(mas) mas.disabled = true;
+  }
   const total = ()=>{
     const n = Math.abs(parseInt(c.value,10)||0);
     let txt = `Quedan <strong>${tipo==='entrada' ? e.s+n : e.s-n}</strong> ${esc(p.unidad||'un')} en stock`;
@@ -452,8 +560,8 @@ function vStock(){
     <div class="panel">
       <h2>Stock actual</h2>
       ${orden.map(p=>{const e=estado(p);return `
-        <div class="item"><span class="dot ${e.cls}" title="${e.txt}"></span>
-          <div class="grow"><div class="name">${esc(p.nombre)}</div>
+        <div class="item"><span class="dot ${e.cls}" title="${e.txt}"></span>${thumb(p.sku,'chica')}
+          <div class="grow"><div class="name">${esc(p.nombre)}${p.unica?' <span class="unica">única</span>':''}</div>
             <div class="sub">${esc(p.sku)} · mín ${p.min||0} · ${esc(p.ubicacion||'sin ubicación')}</div></div>
           <div><div class="qty">${e.s}</div><div class="sub" style="text-align:right">${esc(p.unidad||'un')}</div></div>
           <button data-mov="${esc(p.sku)}">Mover</button>
@@ -551,20 +659,40 @@ function emptyProd(){
 }
 function vProd(){
   if(!productos.length) return emptyProd();
+  const orden = [...productos].sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const sinFoto = productos.filter(p=>!fotoCache[p.sku]).length;
+
+  const cuerpo = prodVista==='galeria'
+    ? `<div class="galeria">${orden.map(p=>{
+        const e=estado(p), f=fotoCache[p.sku];
+        return `<button class="pieza" data-edit="${esc(p.sku)}">
+          ${f?`<img src="${f}" alt="">`:`<div class="ph">◇</div>`}
+          <div class="cap"><b>${esc(p.nombre)}</b>
+            <span><span class="dot ${e.cls}" style="display:inline-block;margin-right:5px"></span>${e.s} ${esc(p.unidad||'un')}${p.unica?' · única':''}</span>
+          </div></button>`}).join('')}</div>`
+    : orden.map(p=>`
+        <div class="item">${thumb(p.sku,'chica')}
+          <div class="grow"><div class="name">${esc(p.nombre)}${p.unica?' <span class="unica">única</span>':''}</div>
+          <div class="sub">${esc(p.sku)} · ${(p.codigos||[]).length?esc((p.codigos||[]).join(', ')):'sin código de barras'}</div></div>
+          <button data-edit="${esc(p.sku)}">Editar</button></div>`).join('');
+
   $('#view').innerHTML = `
     <div class="panel">
       <div class="row"><button class="big in" id="nuevo">Cargar producto</button></div>
       <button class="link" id="imp">Pegar listado desde Sheets</button>
     </div>
     <div class="panel">
-      <h2>Productos</h2>
-      ${[...productos].sort((a,b)=>a.nombre.localeCompare(b.nombre)).map(p=>`
-        <div class="item"><div class="grow"><div class="name">${esc(p.nombre)}</div>
-          <div class="sub">${esc(p.sku)} · ${(p.codigos||[]).length?esc((p.codigos||[]).join(', ')):'sin código de barras'}</div></div>
-          <button data-edit="${esc(p.sku)}">Editar</button></div>`).join('')}
+      <div class="seg" style="margin-bottom:12px">
+        <button class="in" data-pv="galeria" aria-pressed="${prodVista==='galeria'}">Fotos</button>
+        <button class="in" data-pv="lista" aria-pressed="${prodVista==='lista'}">Detalle</button>
+      </div>
+      ${sinFoto?`<div class="totalbox" style="margin:0 0 12px"><strong>${sinFoto}</strong> ${sinFoto===1?'producto sin foto':'productos sin foto'} — tocá uno para agregarla</div>`:''}
+      ${cuerpo}
     </div>`;
+
   $('#nuevo').onclick=()=>openProdForm();
   $('#imp').onclick=openImport;
+  $('#view').querySelectorAll('[data-pv]').forEach(b=> b.onclick=()=>{prodVista=b.dataset.pv;render()});
   $('#view').querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=>openProdForm(b.dataset.edit));
 }
 
@@ -582,6 +710,13 @@ function openProdForm(sku, codigoPre){
     </div>
     <label for="fM">Stock mínimo</label><input id="fM" type="number" inputmode="numeric" value="${esc(p?.min??0)}">
     <label for="fL">Ubicación</label><input id="fL" value="${esc(p?.ubicacion||'')}" placeholder="Estante, rack, sector">
+    <div class="check" style="margin-top:14px">
+      <input type="checkbox" id="fUni" ${p?.unica?'checked':''}>
+      <label for="fUni" style="margin:0;color:var(--ink)">Pieza única, hay una sola</label>
+    </div>
+    <label>Foto</label>
+    <div id="fotoZona"></div>
+    <input type="file" id="fFile" accept="image/*" capture="environment" hidden>
     ${p?'':`<label for="fI">Stock inicial</label><input id="fI" type="number" inputmode="numeric" value="0">`}
     <div class="row" style="margin-top:16px">
       <button class="ghost" onclick="closeSheet()">Cancelar</button>
@@ -589,13 +724,40 @@ function openProdForm(sku, codigoPre){
     </div>
     ${p?`<button class="link danger" id="fD" style="margin-top:8px">Borrar producto y sus movimientos</button>`:''}`);
 
+  // foto: previsualizacion y captura
+  let fotoNueva = null, fotoBorrar = false;
+  const pintarFoto = async ()=>{
+    const z = $('#fotoZona'); if(!z) return;
+    const actual = fotoNueva || (p && !fotoBorrar ? await traerFoto(p.sku) : null);
+    z.innerHTML = actual
+      ? `<img class="fotogrande" src="${actual}" alt="">
+         <div class="row" style="margin-top:9px">
+           <button type="button" id="fCambiar">Cambiar foto</button>
+           <button type="button" class="ghost" id="fQuitar">Quitar</button>
+         </div>`
+      : `<div class="row"><button type="button" class="big in" id="fCambiar">Sacar o elegir foto</button></div>`;
+    $('#fCambiar').onclick = ()=> $('#fFile').click();
+    const q = $('#fQuitar');
+    if(q) q.onclick = ()=>{ fotoNueva=null; fotoBorrar=true; pintarFoto(); };
+  };
+  $('#fFile').onchange = async e=>{
+    const f = e.target.files && e.target.files[0]; if(!f) return;
+    toast('Procesando foto…');
+    try{ fotoNueva = await reducir(f, 700); fotoBorrar = false; pintarFoto(); }
+    catch(err){ toast('No se pudo procesar la imagen'); }
+    e.target.value = '';
+  };
+  pintarFoto();
+
   $('#fG').onclick = async ()=>{
     const nombre=$('#fN').value.trim(), nsku=$('#fS').value.trim();
     if(!nombre||!nsku){ toast('Nombre y SKU son obligatorios'); return; }
     if(!p && bySku(nsku)){ toast('Ese SKU ya existe'); return; }
     const codigos = $('#fC').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const unica = $('#fUni').checked;
     const datos = {nombre, sku:nsku, codigos, unidad:$('#fU').value.trim()||'un',
-      bulto:Math.max(1,+$('#fB').value||1), min:+$('#fM').value||0, ubicacion:$('#fL').value.trim()};
+      bulto: unica ? 1 : Math.max(1,+$('#fB').value||1), min:+$('#fM').value||0,
+      ubicacion:$('#fL').value.trim(), unica};
     if(p){
       const viejo = p.sku;
       Object.assign(p, datos);
@@ -607,12 +769,24 @@ function openProdForm(sku, codigoPre){
       if(ini>0){ movs.unshift({id:uid(), ts:Date.now(), sku:nsku, tipo:'entrada', cant:ini, motivo:'Carga inicial', nota:''}); await save(K_MOV, movs); }
     }
     await save(K_PROD, productos);
+
+    if(fotoNueva){
+      await guardarFoto(nsku, fotoNueva);
+      const reg = bySku(nsku); if(reg) reg.fotoSync = false;
+    }else if(p && fotoBorrar){
+      await borrarFoto(p.sku);
+    }else if(p && p.sku !== nsku){
+      const vieja = await traerFoto(p.sku);                  // el SKU cambio: la foto lo sigue
+      if(vieja){ await guardarFoto(nsku, vieja); await borrarFoto(p.sku); }
+    }
+    await save(K_PROD, productos);
     closeSheet(); toast('Producto guardado'); render();
   };
   if(p) $('#fD').onclick = async ()=>{
     if(!confirm(`¿Borrar ${p.nombre} y todos sus movimientos?`)) return;
     productos = productos.filter(x=>x.sku!==p.sku);
     movs = movs.filter(m=>m.sku!==p.sku);
+    await borrarFoto(p.sku);
     await save(K_PROD, productos); await save(K_MOV, movs);
     closeSheet(); toast('Producto borrado'); render();
   };
@@ -651,6 +825,33 @@ function openImport(){
 /* ─────────── Conexión con Google Sheets ─────────── */
 function pendientes(){ return movs.filter(m=>!m.sync); }
 
+function fotosPendientes(){
+  return productos.filter(p=>fotoCache[p.sku] && p.fotoSync !== true);
+}
+
+async function subirFotos(){
+  const lista = fotosPendientes();
+  if(!lista.length){ toast('No hay fotos pendientes'); return; }
+  let ok = 0, fallo = 0;
+  for(let i=0; i<lista.length; i++){
+    const p = lista[i];
+    toast(`Subiendo foto ${i+1} de ${lista.length}…`);
+    try{
+      const dataUrl = fotoCache[p.sku] || await traerFoto(p.sku);
+      if(!dataUrl){ fallo++; continue; }
+      const r = await pedir({action:'foto'}, {
+        sku: p.sku,
+        nombre: p.nombre,
+        base64: dataUrl.split(',')[1]              // sin el prefijo data:image/jpeg
+      });
+      if(r.ok){ p.fotoSync = true; ok++; } else fallo++;
+    }catch(e){ fallo++; }
+  }
+  await save(K_PROD, productos);
+  toast(`${ok} fotos en la planilla${fallo?` · ${fallo} fallaron`:''}`);
+  render();
+}
+
 function vSheets(){
   const pend = pendientes().length;
   const u = cfg.ultima ? fecha(cfg.ultima) : null;
@@ -664,6 +865,17 @@ function vSheets(){
         <button class="big in" id="push" ${cfg.url?'':'disabled style="opacity:.45"'}>Subir a Sheets</button>
       </div>
       <button class="link" id="pull" ${cfg.url?'':'style="opacity:.45;pointer-events:none"'}>Traer productos desde Sheets</button>
+    </div>
+
+    <div class="panel">
+      <h2>Fotos por subir</h2>
+      <div class="totalbox" style="margin:0">
+        <strong>${fotosPendientes().length}</strong> fotos sin subir a Drive
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="pushFotos" ${cfg.url?'':'disabled style="opacity:.45"'}>Subir fotos</button>
+      </div>
+      <p class="muted" style="margin:10px 0 0">Cada foto pesa unos 70 KB. Conviene subirlas con wifi y no en la calle.</p>
     </div>
 
     <div class="panel">
@@ -690,6 +902,7 @@ function vSheets(){
   };
   const p = $('#cP'); if(p) p.onclick = probar;
   const b = $('#push'); if(b) b.onclick = subir;
+  const bf = $('#pushFotos'); if(bf) bf.onclick = subirFotos;
   const l = $('#pull'); if(l) l.onclick = bajar;
   $('#expStock2').onclick = ()=> copiar(csvStock(), 'Stock copiado');
   $('#expMovs2').onclick = ()=> copiar(csvMovs(), 'Movimientos copiados');
@@ -727,11 +940,13 @@ async function bajar(){
       if(ex){
         ex.nombre=x.nombre; ex.unidad=x.unidad||ex.unidad; ex.bulto=Math.max(1,+x.bulto||1);
         ex.min=+x.min||0; ex.ubicacion=x.ubicacion||ex.ubicacion;
+        if(x.unica !== undefined) ex.unica = !!x.unica;
         if(x.codigo && !(ex.codigos||[]).includes(x.codigo)) ex.codigos=[...(ex.codigos||[]), x.codigo];
         act++;
       }else{
         productos.push({sku:x.sku, nombre:x.nombre, codigos:x.codigo?[String(x.codigo)]:[],
-          unidad:x.unidad||'un', bulto:Math.max(1,+x.bulto||1), min:+x.min||0, ubicacion:x.ubicacion||''});
+          unidad:x.unidad||'un', bulto:Math.max(1,+x.bulto||1), min:+x.min||0,
+          ubicacion:x.ubicacion||'', unica:!!x.unica});
         nuevos++;
       }
     });
@@ -791,6 +1006,8 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
   cfg = (await load(K_CFG)) || cfg;
   productos = (await load(K_PROD)) || [];
   movs = (await load(K_MOV)) || [];
+  render();
+  await precargarFotos();                      // las miniaturas aparecen apenas estan listas
   render();
 })();
 </script>
