@@ -327,8 +327,8 @@ function itemsSesion(){
 function agrupar(lista){
   const map = new Map();
   lista.forEach(m=>{
-    const k = m.sku+'|'+m.tipo;
-    if(!map.has(k)) map.set(k, {sku:m.sku, tipo:m.tipo, cant:0, veces:0});
+    const k = m.sku+'|'+m.tipo+'|'+(m.lote||'');          // cada lote cuenta aparte
+    if(!map.has(k)) map.set(k, {sku:m.sku, tipo:m.tipo, lote:m.lote||'', cant:0, veces:0});
     const g = map.get(k); g.cant += m.cant; g.veces++;
   });
   return [...map.values()];
@@ -350,7 +350,7 @@ function panelSesion(){
         const col = x.tipo==='entrada'?'var(--entrada)':'var(--salida)';
         return `<div class="item">
           <div class="grow"><div class="name">${esc(p?p.nombre:x.sku)}</div>
-            <div class="sub">${x.tipo==='entrada'?'Entrada':'Salida'} · ${x.veces} carga${x.veces>1?'s':''}${b>1?` · ${(x.cant/b).toFixed(x.cant%b?2:0)} bultos`:''}</div></div>
+            <div class="sub">${x.tipo==='entrada'?'Entrada':'Salida'}${x.lote?` · lote ${esc(x.lote)}`:''} · ${x.veces} carga${x.veces>1?'s':''}${b>1?` · ${(x.cant/b).toFixed(x.cant%b?2:0)} bultos`:''}</div></div>
           <div><div class="qty" style="color:${col}">${x.tipo==='entrada'?'+':'−'}${x.cant}</div>
             <div class="sub" style="text-align:right">${esc(p?.unidad||'un')}</div></div>
         </div>`}).join('')}
@@ -366,8 +366,8 @@ function panelSesion(){
 function wireSesion(){
   const c=$('#sesCopy'), l=$('#sesClear');
   if(c) c.onclick = ()=>{
-    const filas = [['SKU','Producto','Tipo','Cantidad','Unidad']].concat(
-      agrupar(itemsSesion()).map(x=>{const p=bySku(x.sku);return [x.sku,p?p.nombre:'',x.tipo,x.cant,p?.unidad||'un']}));
+    const filas = [['SKU','Producto','Tipo','Cantidad','Unidad','Lote']].concat(
+      agrupar(itemsSesion()).map(x=>{const p=bySku(x.sku);return [x.sku,p?p.nombre:'',x.tipo,x.cant,p?.unidad||'un',x.lote||'']}));
     copiar(filas.map(r=>r.map(cell).join(',')).join('\n'), 'Tanda copiada');
   };
   if(l) l.onclick = ()=>{
@@ -395,12 +395,32 @@ async function stopScan(manual){
   scanning=false;
   const b=$('#btnScan'); if(b && manual!==undefined){ b.textContent='Encender cámara'; b.className='big in'; }
 }
+/* El codigo impreso trae producto (8) + lote (4). Las etiquetas viejas de 8
+   digitos siguen valiendo: ahi todo el codigo es el producto y no hay lote. */
+function partirCodigo(c){
+  c = String(c).trim();
+  // Solo se parte si son EXACTAMENTE 12 digitos: ese es el formato producto+lote.
+  // Con la regla floja de "12 o mas" se rompian dos casos reales: los SKU
+  // alfanumericos de envases (ENV-FR-YOL-100D) y los EAN de fabrica de 13 digitos.
+  if(/^\d{12}$/.test(c)){
+    const lote = c.slice(8,12);
+    return {prod: c.slice(0,8), lote: lote === '0000' ? '' : lote};
+  }
+  return {prod: c, lote: ''};
+}
+function buscarPorCodigo(c){
+  const {prod, lote} = partirCodigo(c);
+  let p = productos.find(x=>(x.codigos||[]).includes(prod));
+  if(!p) p = productos.find(x=>(x.codigos||[]).includes(String(c).trim()));   // por las dudas
+  return {p, prod, lote};
+}
+
 function onScan(code){
   if(navigator.vibrate) navigator.vibrate(60);
   stopScan();
   const b=$('#btnScan'); if(b){ b.textContent='Encender cámara'; b.className='big in'; }
-  const p = productos.find(x=>(x.codigos||[]).includes(code));
-  p ? openMov(p.sku, null, 'scan') : openDesconocido(code);
+  const r = buscarPorCodigo(code);
+  r.p ? openMov(r.p.sku, null, 'scan', r.lote) : openDesconocido(r.prod);
 }
 
 /* ─────────── Hoja de movimiento ─────────── */
@@ -411,8 +431,9 @@ function openSheet(html){
 }
 function closeSheet(){ $('#sheet').hidden = true; }
 
-function openMov(sku, tipoIni, origen){
+function openMov(sku, tipoIni, origen, loteLeido){
   const p = bySku(sku); if(!p) return;
+  const pideLote = !!(p.lleva_lote || loteLeido);
   const bulto = Math.max(1, Number(p.bulto)||1);
   const e = estado(p);
   let tipo = tipoIni || 'salida';
@@ -436,6 +457,10 @@ function openMov(sku, tipoIni, origen){
       <button class="clear" data-set="0">Borrar</button>
     </div>
     <div class="totalbox" id="tot"></div>
+    ${pideLote ? `
+    <label for="flote">Lote ${loteLeido?'<span style="font-weight:400">— leído de la etiqueta</span>':'<span style="font-weight:400">(4 dígitos)</span>'}</label>
+    <input id="flote" inputmode="numeric" maxlength="4" value="${esc(loteLeido||'')}" placeholder="0247"
+      style="${loteLeido?'background:#EAF1F5;font-weight:700;letter-spacing:.14em':''}">` : ''}
     <label for="motivo">Motivo</label>
     <select id="motivo"></select>
     <label for="nota">Nota <span style="font-weight:400">(pedido, vendedora, guía…)</span></label>
@@ -480,7 +505,13 @@ function openMov(sku, tipoIni, origen){
     const cant = Math.abs(parseInt($('#cant').value,10)||0);
     if(!cant){ toast('Poné una cantidad'); return; }
     if(tipo==='salida' && cant>e.s && !confirm(`Hay ${e.s} en stock y estás sacando ${cant}. ¿Guardar igual?`)) return;
-    const nuevo = {id:uid(), ts:Date.now(), sku:p.sku, tipo, cant, motivo:$('#motivo').value, nota:$('#nota').value.trim()};
+    const campoLote = $('#flote');
+    const lote = campoLote ? campoLote.value.trim() : '';
+    if(p.lleva_lote && !lote &&
+       !confirm('Este producto lleva lote y quedó vacío. ¿Guardar igual? Sin lote no se puede rastrear la partida ante un reclamo.')) return;
+
+    const nuevo = {id:uid(), ts:Date.now(), sku:p.sku, tipo, cant, lote,
+                   motivo:$('#motivo').value, nota:$('#nota').value.trim()};
     movs.unshift(nuevo);
     sesion.unshift(nuevo.id);
     await save(K_MOV, movs);
@@ -616,7 +647,7 @@ function vMovs(){
       const col=m.tipo==='entrada'?'var(--entrada)':'var(--salida)';
       return `<div class="item">
         <div class="grow"><div class="name">${esc(p?p.nombre:m.sku)}</div>
-          <div class="sub">${d.f} ${d.h} · ${esc(m.motivo)}${m.nota?' · '+esc(m.nota):''}</div></div>
+          <div class="sub">${d.f} ${d.h}${m.lote?` · lote ${esc(m.lote)}`:''} · ${esc(m.motivo)}${m.nota?' · '+esc(m.nota):''}</div></div>
         <div class="qty" style="color:${col}">${m.tipo==='entrada'?'+':'−'}${m.cant}</div>
         <button class="link danger" data-del="${m.id}">Anular</button>
       </div>`}).join('');
@@ -711,6 +742,10 @@ function openProdForm(sku, codigoPre){
     <label for="fM">Stock mínimo</label><input id="fM" type="number" inputmode="numeric" value="${esc(p?.min??0)}">
     <label for="fL">Ubicación</label><input id="fL" value="${esc(p?.ubicacion||'')}" placeholder="Estante, rack, sector">
     <div class="check" style="margin-top:14px">
+      <input type="checkbox" id="fLot" ${p?.lleva_lote?'checked':''}>
+      <label for="fLot" style="margin:0;color:var(--ink)">Lleva lote (perfume, colonia, crema, granel)</label>
+    </div>
+    <div class="check">
       <input type="checkbox" id="fUni" ${p?.unica?'checked':''}>
       <label for="fUni" style="margin:0;color:var(--ink)">Pieza única, hay una sola</label>
     </div>
@@ -757,7 +792,7 @@ function openProdForm(sku, codigoPre){
     const unica = $('#fUni').checked;
     const datos = {nombre, sku:nsku, codigos, unidad:$('#fU').value.trim()||'un',
       bulto: unica ? 1 : Math.max(1,+$('#fB').value||1), min:+$('#fM').value||0,
-      ubicacion:$('#fL').value.trim(), unica};
+      ubicacion:$('#fL').value.trim(), unica, lleva_lote:$('#fLot').checked};
     if(p){
       const viejo = p.sku;
       Object.assign(p, datos);
@@ -832,7 +867,7 @@ function fotosPendientes(){
 async function subirFotos(){
   const lista = fotosPendientes();
   if(!lista.length){ toast('No hay fotos pendientes'); return; }
-  let ok = 0, fallo = 0;
+  let ok = 0, fallo = 0, motivo = '';
   for(let i=0; i<lista.length; i++){
     const p = lista[i];
     toast(`Subiendo foto ${i+1} de ${lista.length}…`);
@@ -844,11 +879,21 @@ async function subirFotos(){
         nombre: p.nombre,
         base64: dataUrl.split(',')[1]              // sin el prefijo data:image/jpeg
       });
-      if(r.ok){ p.fotoSync = true; ok++; } else fallo++;
-    }catch(e){ fallo++; }
+      if(r.ok){ p.fotoSync = true; ok++; }
+      else { fallo++; motivo = motivo || (r.error || 'sin detalle'); }
+    }catch(e){ fallo++; motivo = motivo || e.message; }
   }
   await save(K_PROD, productos);
-  toast(`${ok} fotos en la planilla${fallo?` · ${fallo} fallaron`:''}`);
+  if(fallo && motivo){
+    openSheet(`
+      <h2 style="margin:2px 0 8px;font-size:19px">No se pudieron subir ${fallo} ${fallo===1?'foto':'fotos'}</h2>
+      <p class="muted" style="margin:0 0 6px">Esto contestó la planilla:</p>
+      <div class="totalbox" style="margin:0;word-break:break-word">${esc(motivo)}</div>
+      <p class="muted" style="margin:12px 0 0">Si dice que el SKU no está en PARAMETROS, agregá esa fila en la planilla y volvé a intentar.</p>
+      <div class="row" style="margin-top:14px"><button class="big in" onclick="closeSheet()">Entendido</button></div>`);
+  }else{
+    toast(`${ok} fotos en la planilla`);
+  }
   render();
 }
 
@@ -941,12 +986,13 @@ async function bajar(){
         ex.nombre=x.nombre; ex.unidad=x.unidad||ex.unidad; ex.bulto=Math.max(1,+x.bulto||1);
         ex.min=+x.min||0; ex.ubicacion=x.ubicacion||ex.ubicacion;
         if(x.unica !== undefined) ex.unica = !!x.unica;
+        if(x.lleva_lote !== undefined) ex.lleva_lote = !!x.lleva_lote;
         if(x.codigo && !(ex.codigos||[]).includes(x.codigo)) ex.codigos=[...(ex.codigos||[]), x.codigo];
         act++;
       }else{
         productos.push({sku:x.sku, nombre:x.nombre, codigos:x.codigo?[String(x.codigo)]:[],
           unidad:x.unidad||'un', bulto:Math.max(1,+x.bulto||1), min:+x.min||0,
-          ubicacion:x.ubicacion||'', unica:!!x.unica});
+          ubicacion:x.ubicacion||'', unica:!!x.unica, lleva_lote:!!x.lleva_lote});
         nuevos++;
       }
     });
@@ -962,7 +1008,7 @@ async function subir(){
   const lote = pend.map(m=>{
     const p=bySku(m.sku), d=fecha(m.ts);
     return {id:m.id, fecha:d.f, hora:d.h, sku:m.sku, producto:p?p.nombre:'', tipo:m.tipo,
-            cantidad:m.cant, motivo:m.motivo, nota:m.nota||''};
+            cantidad:m.cant, motivo:m.motivo, nota:m.nota||'', lote:m.lote||''};
   });
   try{
     const r = await pedir({action:'movimientos'}, {movimientos:lote});
@@ -986,9 +1032,9 @@ function csvStock(){
     .map(r=>r.map(cell).join(',')).join('\n');
 }
 function csvMovs(){
-  const h=['Fecha','Hora','SKU','Producto','Tipo','Cantidad','Motivo','Nota'];
+  const h=['Fecha','Hora','SKU','Producto','Tipo','Cantidad','Motivo','Nota','Lote'];
   return [h, ...movs.map(m=>{const p=bySku(m.sku), d=fecha(m.ts);
-    return [d.f,d.h,m.sku,p?p.nombre:'',m.tipo,m.cant,m.motivo,m.nota]})]
+    return [d.f,d.h,m.sku,p?p.nombre:'',m.tipo,m.cant,m.motivo,m.nota,m.lote||'']})]
     .map(r=>r.map(cell).join(',')).join('\n');
 }
 async function copiar(txt,ok){
