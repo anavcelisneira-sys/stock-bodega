@@ -145,7 +145,12 @@ async function save(k,v){
   catch(e){ alert('No se pudo guardar: el almacenamiento del telefono esta lleno.'); }
 }
 
-const K_PROD='inv:productos', K_MOV='inv:movimientos', K_CFG='inv:config';
+const K_PROD='inv:productos', K_MOV='inv:movimientos', K_CFG='inv:config', K_STOCK='inv:stock';
+/* stockBase guarda el stock que dice la hoja RESUMEN y cuando se trajo.
+   El numero que ve la persona es ese, mas lo que cargo en el telefono y
+   todavia no subio. Sin esto, la app mostraba solo lo cargado en este
+   telefono y nunca coincidia con la bodega. */
+let stockBase = {ts:null, datos:{}};
 
 /* ─────────── Fotos ───────────
    Van en IndexedDB, no en el almacenamiento comun: una foto pesa mucho mas que
@@ -248,9 +253,36 @@ const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>'
 const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const bySku = sku => productos.find(p=>p.sku===sku);
 
-function stock(sku){
-  return movs.reduce((t,m)=> m.sku===sku ? t + (m.tipo==='entrada'? m.cant : -m.cant) : t, 0);
+function pendientesDe(sku){
+  return movs.reduce((t,m)=>{
+    if(m.sku!==sku || m.sync) return t;
+    return t + (m.tipo==='entrada' ? m.cant : -m.cant);
+  }, 0);
 }
+function stockPlanilla(sku){
+  const v = stockBase.datos[sku];
+  return v === undefined ? null : v;
+}
+function stock(sku){
+  const base = stockPlanilla(sku);
+  if(base === null){
+    // Todavia no se trajo el stock: se muestra solo lo cargado en este telefono
+    return movs.reduce((t,m)=> m.sku===sku ? t + (m.tipo==='entrada'? m.cant : -m.cant) : t, 0);
+  }
+  return base + pendientesDe(sku);
+}
+function hayBase(){ return !!stockBase.ts; }
+function haceCuanto(){
+  if(!stockBase.ts) return 'nunca';
+  const min = Math.round((Date.now()-stockBase.ts)/60000);
+  if(min < 1) return 'recién';
+  if(min < 60) return `hace ${min} min`;
+  const hs = Math.round(min/60);
+  if(hs < 24) return `hace ${hs} h`;
+  const d = fecha(stockBase.ts);
+  return `el ${d.f}`;
+}
+
 function estado(p){
   const s = stock(p.sku);
   if(s<=0) return {cls:'zero',txt:'Sin stock',s};
@@ -440,7 +472,14 @@ function openMov(sku, tipoIni, origen, loteLeido){
   openSheet(`
     ${fotoCache[p.sku] ? `<img class="fotogrande" src="${fotoCache[p.sku]}" alt="" style="margin-bottom:12px">` : ''}
     <h2 style="margin:2px 0 2px;font-size:19px">${esc(p.nombre)}${p.unica?' <span class="unica">única</span>':''}</h2>
-    <p class="muted" style="margin:0 0 14px">${esc(p.sku)} · ${esc(p.ubicacion||'sin ubicación')} · stock <span class="num">${e.s}</span> ${esc(p.unidad||'un')}</p>
+    <p class="muted" style="margin:0 0 14px">${esc(p.sku)} · ${esc(p.ubicacion||'sin ubicación')}</p>
+    <div class="totalbox" style="margin:0 0 14px">
+      En bodega hay <strong>${e.s}</strong> ${esc(p.unidad||'un')}${(()=>{
+        const base = stockPlanilla(p.sku), pend = pendientesDe(p.sku);
+        if(base === null) return ' <span style="color:var(--rojo)">(sin confirmar con la planilla)</span>';
+        return pend ? ` — ${base} en la planilla y ${pend>0?'+':''}${pend} sin subir` : '';
+      })()}
+    </div>
     <div class="seg">
       <button class="in" id="tIn" aria-pressed="false">Entrada</button>
       <button class="out" id="tOut" aria-pressed="true">Salida</button>
@@ -481,11 +520,20 @@ function openMov(sku, tipoIni, origen, loteLeido){
   $('#tIn').onclick=()=>{tipo='entrada';paint();total()};
   $('#tOut').onclick=()=>{tipo='salida';paint();total()};
   const c = $('#cant');
-  if(p.unica){                                        // una sola pieza: la cantidad no se discute
+  if(p.unica){
+    // Pieza única: la cantidad queda en 1. Antes se trababan los botones sin
+    // explicar nada y parecía que la app estaba rota.
     c.value = 1; c.readOnly = true;
     const chips = document.querySelector('.chips'); if(chips) chips.remove();
     const men = $('#menos'), mas = $('#mas');
-    if(men) men.disabled = true; if(mas) mas.disabled = true;
+    if(men){ men.disabled = true; men.style.opacity = .3; }
+    if(mas){ mas.disabled = true; mas.style.opacity = .3; }
+    const aviso = document.createElement('div');
+    aviso.className = 'totalbox';
+    aviso.style.cssText = 'background:#E9DFF0;color:#5B3A78;padding:10px 12px;border-radius:11px;margin-top:10px';
+    aviso.innerHTML = 'Está marcado como <strong>pieza única</strong>, por eso la cantidad queda en 1. ' +
+      'Si en realidad hay varias iguales, destildá "Pieza única" en Productos.';
+    c.closest('.stepper').after(aviso);
   }
   const total = ()=>{
     const n = Math.abs(parseInt(c.value,10)||0);
@@ -587,9 +635,15 @@ function vStock(){
     const r={zero:0,low:1,ok:2};
     return r[estado(a).cls]-r[estado(b).cls] || a.nombre.localeCompare(b.nombre);
   });
+  const sinSubir = movs.filter(m=>!m.sync).length;
   $('#view').innerHTML = `
     <div class="panel">
-      <h2>Stock actual</h2>
+      <h2>Stock de bodega</h2>
+      <div class="totalbox" style="margin:0 0 12px">
+        ${hayBase()
+          ? `Según la planilla, actualizado <strong>${haceCuanto()}</strong>${sinSubir?` · incluye <strong>${sinSubir}</strong> ${sinSubir===1?'movimiento':'movimientos'} que todavía no subiste`:''}`
+          : `<span style="color:var(--rojo)">Todavía no trajiste el stock de la planilla.</span> Estos números son solo lo cargado en este teléfono. Andá a Sheets → Traer productos y stock.`}
+      </div>
       ${orden.map(p=>{const e=estado(p);return `
         <div class="item"><span class="dot ${e.cls}" title="${e.txt}"></span>${thumb(p.sku,'chica')}
           <div class="grow"><div class="name">${esc(p.nombre)}${p.unica?' <span class="unica">única</span>':''}</div>
@@ -909,7 +963,7 @@ function vSheets(){
       <div class="row" style="margin-top:12px">
         <button class="big in" id="push" ${cfg.url?'':'disabled style="opacity:.45"'}>Subir a Sheets</button>
       </div>
-      <button class="link" id="pull" ${cfg.url?'':'style="opacity:.45;pointer-events:none"'}>Traer productos desde Sheets</button>
+      <button class="link" id="pull" ${cfg.url?'':'style="opacity:.45;pointer-events:none"'}>Traer productos y stock desde Sheets</button>
     </div>
 
     <div class="panel">
@@ -972,9 +1026,23 @@ async function probar(){
   }catch(e){ toast('No se pudo conectar. Revisá la dirección y la clave.'); }
 }
 
+async function traerStock(silencioso){
+  try{
+    const r = await pedir({action:'stock'});
+    if(!r.ok) throw new Error(r.error||'error');
+    stockBase = {ts: Date.now(), datos: r.stock || {}};
+    await save(K_STOCK, stockBase);
+    if(!silencioso) toast(`Stock actualizado: ${Object.keys(stockBase.datos).length} productos`);
+    return true;
+  }catch(e){
+    if(!silencioso) toast('No se pudo traer el stock: '+e.message);
+    return false;
+  }
+}
+
 async function bajar(){
-  if(!confirm('Traer el maestro de productos desde PARAMETROS. Se actualizan los que ya tenés y se agregan los nuevos. No borra movimientos.')) return;
-  toast('Trayendo productos…');
+  if(!confirm('Trae los productos y el stock desde la planilla. Se actualizan los que ya tenés y se agregan los nuevos. No borra nada de lo cargado en el teléfono.')) return;
+  toast('Actualizando…');
   try{
     const r = await pedir({action:'productos'});
     if(!r.ok) throw new Error(r.error||'error');
@@ -997,7 +1065,8 @@ async function bajar(){
       }
     });
     await save(K_PROD, productos);
-    toast(`${nuevos} nuevos · ${act} actualizados`); render();
+    await traerStock(true);
+    toast(`${nuevos} nuevos · ${act} actualizados · stock al día`); render();
   }catch(e){ toast('No se pudieron traer los productos: '+e.message); }
 }
 
@@ -1017,6 +1086,7 @@ async function subir(){
     movs.forEach(m=>{ if(ok.has(m.id)) m.sync = true; });
     cfg.ultima = Date.now();
     await save(K_MOV, movs); await save(K_CFG, cfg);
+    await traerStock(true);                       // ya estan en la planilla: refrescamos la base
     toast(`${ok.size} movimientos en la planilla`); render();
   }catch(e){
     toast('No se pudo subir. Quedan pendientes, probá de nuevo con señal.');
@@ -1052,6 +1122,7 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
   cfg = (await load(K_CFG)) || cfg;
   productos = (await load(K_PROD)) || [];
   movs = (await load(K_MOV)) || [];
+  stockBase = (await load(K_STOCK)) || stockBase;
   render();
   await precargarFotos();                      // las miniaturas aparecen apenas estan listas
   render();
